@@ -171,8 +171,6 @@ func MakeCoordinator(files []string, nReduce int) *Coordinator {
 		nMap:    len(files),
 		tasks:   []Task{},
 		status:  make(map[Task]status),
-		mu:      sync.Mutex{},
-		wg:      sync.WaitGroup{},
 		done:    false,
 	}
 

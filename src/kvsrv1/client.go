@@ -2,10 +2,9 @@ package kvsrv
 
 import (
 	"6.5840/kvsrv1/rpc"
-	"6.5840/kvtest1"
-	"6.5840/tester1"
+	kvtest "6.5840/kvtest1"
+	tester "6.5840/tester1"
 )
-
 
 type Clerk struct {
 	clnt   *tester.Clnt
@@ -30,7 +29,26 @@ func MakeClerk(clnt *tester.Clnt, server string) kvtest.IKVClerk {
 // arguments. Additionally, reply must be passed as a pointer.
 func (ck *Clerk) Get(key string) (string, rpc.Tversion, rpc.Err) {
 	// You will have to modify this function.
-	return "", 0, rpc.ErrNoKey
+	for {
+		args := rpc.GetArgs{Key: key}
+		reply := rpc.GetReply{}
+
+		ok := ck.clnt.Call(ck.server, "KVServer.Get", &args, &reply)
+		if !ok {
+			continue
+		}
+
+		switch reply.Err {
+		case rpc.ErrNoKey:
+			return "", 0, rpc.ErrNoKey
+
+		case rpc.OK:
+			return reply.Value, reply.Version, rpc.OK
+
+		default:
+			continue
+		}
+	}
 }
 
 // Put updates key with value only if the version in the
@@ -52,5 +70,28 @@ func (ck *Clerk) Get(key string) (string, rpc.Tversion, rpc.Err) {
 // arguments. Additionally, reply must be passed as a pointer.
 func (ck *Clerk) Put(key, value string, version rpc.Tversion) rpc.Err {
 	// You will have to modify this function.
-	return rpc.ErrNoKey
+	ok, err := ck.putInner(key, value, version, true)
+	for !ok {
+		ok, err = ck.putInner(key, value, version, false)
+	}
+	return err
+}
+
+func (ck *Clerk) putInner(key, value string, version rpc.Tversion, first bool) (bool, rpc.Err) {
+	args := rpc.PutArgs{Key: key, Value: value, Version: version}
+	reply := rpc.PutReply{}
+
+	ok := ck.clnt.Call(ck.server, "KVServer.Put", &args, &reply)
+	if !ok {
+		return false, rpc.ErrMaybe
+	}
+
+	err := reply.Err
+	if err == rpc.ErrVersion {
+		if !first {
+			err = rpc.ErrMaybe
+		}
+	}
+
+	return true, err
 }
